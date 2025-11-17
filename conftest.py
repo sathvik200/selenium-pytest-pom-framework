@@ -19,7 +19,10 @@ def driver(request, tmp_path):
     download_dir.mkdir(parents=True, exist_ok=True)
 
     chrome_options = Options()
-
+    import os
+    headless = os.environ.get("CI", "false").lower() == "true"
+    if headless:
+        chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--incognito")
     chrome_options.add_argument("--no-first-run")
     chrome_options.add_argument("--no-default-browser-check")

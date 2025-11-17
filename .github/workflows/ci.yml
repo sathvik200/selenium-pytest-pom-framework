@@ -1,0 +1,83 @@
+name: CI - PyTest Selenium
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install system dependencies (Chrome)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y unzip xvfb libxi6 libgconf-2-4 libappindicator3-1 libnss3 libasound2
+          # Install Google Chrome
+          sudo apt-get install -y wget gnupg
+          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+          echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get update -y
+          sudo apt-get install -y google-chrome-stable
+          google-chrome --version
+
+      - name: Install project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # Ensure webdriver-manager is available to download chromedriver if your tests use it
+          pip install webdriver-manager
+
+      - name: Show Python & Chrome info
+        run: |
+          python --version
+          google-chrome --version
+
+      - name: Run tests (pytest)
+        # run headless tests, produce HTML + JUnit, and ensure screenshots saved to screenshots/
+        env:
+          PYTHONUNBUFFERED: 1
+        run: |
+          mkdir -p reports screenshots || true
+          # run pytest, create html report and junit xml
+          pytest -v --maxfail=1 --html=reports/report.html --self-contained-html --junitxml=reports/junit.xml || true
+        continue-on-error: true
+
+      - name: Upload pytest HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-report
+          path: reports/
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots/
+
+      - name: Upload pytest JUnit XML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-xml
+          path: reports/junit.xml
